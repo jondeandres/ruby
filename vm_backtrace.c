@@ -15,6 +15,8 @@
 #include "vm_core.h"
 #include "eval_intern.h"
 #include "iseq.h"
+#include "ruby/intern.h"
+
 
 static VALUE rb_cBacktrace;
 static VALUE rb_cBacktraceLocation;
@@ -346,6 +348,77 @@ location_to_str(rb_backtrace_location_t *loc)
     return location_format(file, lineno, name);
 }
 
+
+struct local_var_list {
+    VALUE tbl;
+};
+
+static void
+local_var_list_init(struct local_var_list *vars)
+{
+    vars->tbl = rb_hash_new();
+    RHASH(vars->tbl)->ntbl = st_init_numtable(); /* compare_by_identity */
+    RBASIC_CLEAR_CLASS(vars->tbl);
+}
+
+static int
+local_var_list_update(st_data_t *key, st_data_t *value, st_data_t arg, int existing)
+{
+    if (existing) return ST_STOP;
+    *value = (st_data_t)Qtrue;	/* INT2FIX(arg) */
+    return ST_CONTINUE;
+}
+
+static void
+local_var_list_add(const struct local_var_list *vars, ID lid)
+{
+    if (lid && rb_id2str(lid)) {
+	/* should skip temporary variable */
+	st_table *tbl = RHASH_TBL_RAW(vars->tbl);
+	st_data_t idx = 0;	/* tbl->num_entries */
+	st_update(tbl, ID2SYM(lid), local_var_list_update, idx);
+    }
+}
+
+static VALUE
+local_var_list_finish(struct local_var_list *vars)
+{
+    /* TODO: not to depend on the order of st_table */
+    VALUE ary = rb_hash_keys(vars->tbl);
+    rb_hash_clear(vars->tbl);
+    vars->tbl = 0;
+    return ary;
+}
+
+static VALUE
+rb_context_local_variables(rb_iseq_t *iseq)
+{
+    struct local_var_list vars;
+    int i;
+
+    local_var_list_init(&vars);
+
+    for (i = 0; i < iseq->local_table_size; i++) {
+        local_var_list_add(&vars, iseq->local_table[i]);
+    }
+
+    return local_var_list_finish(&vars);
+}
+
+VALUE
+context_to_hash(rb_backtrace_location_t *loc)
+{
+    const rb_iseq_t *iseq;
+
+    if (loc->type == LOCATION_TYPE_ISEQ) {
+        iseq = loc->body.iseq.iseq;
+
+        return rb_context_local_variables(iseq);
+    } else {
+        return Qnil;
+    }
+}
+
 /*
  * Returns a Kernel#caller style string representing this frame.
  */
@@ -371,6 +444,7 @@ typedef struct rb_backtrace_struct {
     int backtrace_size;
     VALUE strary;
     VALUE locary;
+    VALUE context_hash;
 } rb_backtrace_t;
 
 static void
@@ -559,6 +633,12 @@ location_to_str_dmyarg(rb_backtrace_location_t *loc, void *dmy)
 }
 
 static VALUE
+context_to_hash_dmyarg(rb_backtrace_location_t *loc, void *dmy)
+{
+    return context_to_hash(loc);
+}
+
+static VALUE
 backtrace_to_str_ary(VALUE self, long lev, long n)
 {
     rb_backtrace_t *bt;
@@ -580,6 +660,29 @@ backtrace_to_str_ary(VALUE self, long lev, long n)
     return r;
 }
 
+static VALUE
+backtrace_context_to_ary(VALUE self, long lev, long n)
+{
+    rb_backtrace_t *bt;
+    int size;
+    VALUE r;
+
+    GetCoreDataFromValue(self, rb_backtrace_t, bt);
+    size = bt->backtrace_size;
+
+    if (n == 0) {
+        n = size;
+    }
+    if (lev > size) {
+        return Qnil;
+    }
+
+    r = backtrace_collect(bt, lev, n, context_to_hash_dmyarg, 0);
+    RB_GC_GUARD(self);
+
+    return r;
+}
+
 VALUE
 rb_backtrace_to_str_ary(VALUE self)
 {
@@ -590,6 +693,19 @@ rb_backtrace_to_str_ary(VALUE self)
 	bt->strary = backtrace_to_str_ary(self, 0, bt->backtrace_size);
     }
     return bt->strary;
+}
+
+VALUE
+rb_backtrace_context_to_ary(VALUE self)
+{
+    rb_backtrace_t *bt;
+    GetCoreDataFromValue(self, rb_backtrace_t, bt);
+
+    if (!bt->context_hash) {
+        bt->context_hash = backtrace_context_to_ary(self, 0, bt->backtrace_size);
+    }
+
+    return bt->context_hash;
 }
 
 static VALUE

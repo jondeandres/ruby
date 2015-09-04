@@ -2033,27 +2033,27 @@ rb_f_local_variables(void)
 
     local_var_list_init(&vars);
     while (cfp) {
-	if (cfp->iseq) {
-	    for (i = 0; i < cfp->iseq->local_table_size; i++) {
-		local_var_list_add(&vars, cfp->iseq->local_table[i]);
-	    }
-	}
-	if (!VM_EP_LEP_P(cfp->ep)) {
-	    /* block */
-	    VALUE *ep = VM_CF_PREV_EP(cfp);
+        if (cfp->iseq) {
+            for (i = 0; i < cfp->iseq->local_table_size; i++) {
+                local_var_list_add(&vars, cfp->iseq->local_table[i]);
+            }
+        }
+        if (!VM_EP_LEP_P(cfp->ep)) {
+            /* block */
+            VALUE *ep = VM_CF_PREV_EP(cfp);
 
-	    if (vm_collect_local_variables_in_heap(th, ep, &vars)) {
-		break;
-	    }
-	    else {
-		while (cfp->ep != ep) {
-		    cfp = RUBY_VM_PREVIOUS_CONTROL_FRAME(cfp);
-		}
-	    }
-	}
-	else {
-	    break;
-	}
+            if (vm_collect_local_variables_in_heap(th, ep, &vars)) {
+                break;
+            }
+            else {
+                while (cfp->ep != ep) {
+                    cfp = RUBY_VM_PREVIOUS_CONTROL_FRAME(cfp);
+                }
+            }
+        }
+        else {
+            break;
+        }
     }
     return local_var_list_finish(&vars);
 }

@@ -781,6 +781,22 @@ exc_backtrace(VALUE exc)
     return obj;
 }
 
+static VALUE
+exc_backtrace_context(VALUE exc)
+{
+    ID bt;
+    VALUE obj;
+
+    CONST_ID(bt, "bt");
+    obj = rb_attr_get(exc, bt);
+
+    if (rb_backtrace_p(obj)) {
+        obj = rb_backtrace_context_to_ary(obj);
+    }
+
+    return obj;
+}
+
 /*
  *  call-seq:
  *     exception.backtrace_locations    -> array
@@ -1820,6 +1836,7 @@ Init_Exception(void)
     rb_define_method(rb_eException, "message", exc_message, 0);
     rb_define_method(rb_eException, "inspect", exc_inspect, 0);
     rb_define_method(rb_eException, "backtrace", exc_backtrace, 0);
+    rb_define_method(rb_eException, "backtrace_context", exc_backtrace_context, 0);
     rb_define_method(rb_eException, "backtrace_locations", exc_backtrace_locations, 0);
     rb_define_method(rb_eException, "set_backtrace", exc_set_backtrace, 1);
     rb_define_method(rb_eException, "cause", exc_cause, 0);
