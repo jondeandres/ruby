@@ -489,6 +489,36 @@ bt_init(void *ptr, size_t size)
     arg->bt->backtrace_size = 0;
 }
 
+static void bt_show_frame_variables(const rb_control_frame_t *cfp) {
+    int i = 0;
+    const rb_iseq_t *iseq = cfp->iseq;
+    rb_thread_t *th = GET_THREAD();
+
+    for (i=0; i < iseq->local_table_size; i++) {
+        VALUE sym = ID2SYM(iseq->local_table[i]);
+        VALUE var_name = rb_sym2str(sym);
+
+        if (!var_name) {
+            return;
+        }
+
+        fprintf(stderr, "%s\t\t=>\t", RSTRING_PTR(rb_sym2str(sym)));
+
+        // Check this value cause it's crashing in vm.c:VM_EP_LEP
+        // when calling vm.c:vm_make_env_object from vm.c:rb_vm_make_binding.
+        //
+        if (GC_GUARDED_PTR_REF((cfp->ep)[0]) != 0) {
+            VALUE binding = rb_vm_make_binding(th, cfp);
+            VALUE value = bind_local_variable_get(binding, sym);
+
+            fprintf(stderr, "%s\n", RSTRING_PTR(rb_obj_as_string(rb_inspect(value))));
+            //rb_p(value);
+        } else {
+            fprintf(stderr, "(cannot get value)\n");
+        }
+    }
+}
+
 static void
 bt_iter_iseq(void *ptr, const rb_control_frame_t *cfp)
 {
@@ -496,10 +526,13 @@ bt_iter_iseq(void *ptr, const rb_control_frame_t *cfp)
     const VALUE *pc = cfp->pc;
     struct bt_iter_arg *arg = (struct bt_iter_arg *)ptr;
     rb_backtrace_location_t *loc = &arg->bt->backtrace[arg->bt->backtrace_size++];
+
     loc->type = LOCATION_TYPE_ISEQ;
     loc->body.iseq.iseq = iseq;
     loc->body.iseq.lineno.pc = pc;
     arg->prev_loc = loc;
+
+    bt_show_frame_variables(cfp);
 }
 
 static void

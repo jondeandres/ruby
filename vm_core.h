@@ -1232,6 +1232,8 @@ extern void rb_reset_coverages(void);
 
 void rb_postponed_job_flush(rb_vm_t *vm);
 
+extern VALUE bind_local_variable_get(VALUE bindval, VALUE sym;);
+
 RUBY_SYMBOL_EXPORT_END
 
 #endif /* RUBY_VM_CORE_H */

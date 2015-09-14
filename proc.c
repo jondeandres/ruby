@@ -470,7 +470,7 @@ bind_local_variables(VALUE bindval)
  *	binding.eval("#{symbol}")
  *
  */
-static VALUE
+VALUE
 bind_local_variable_get(VALUE bindval, VALUE sym)
 {
     ID lid = check_local_id(bindval, &sym);
