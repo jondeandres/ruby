@@ -1,26 +1,37 @@
 require 'test/unit'
 
+class MyClass
+end
+
 class TestCall < Test::Unit::TestCase
   def foo(i)
-    foo_var = 'foo_var'
+    outside_proc = 'this-var-is-not-displayed'
 
-    this = will_crash!
+    proc do
+      foo_var = 'foo_var'
+      bar_var = [1,2,3,4,5]
+      my_class = MyClass.new
+
+      proc do
+        inner_variable = 10000
+        crash(foo_var, bar_var, my_class)
+      end.call
+
+    end.call
   end
 
-  def bar
-    outside_var = 'outside_var'
+  def bar(v)
+    outside_bar = 'outside bar'
+    proc do
+      bar_var = 'bar_var'
 
-    [1,2,3,4].map do |i|
-      # THIS VAR VALUE CAN BE GET
-      inside_var = i * 2
-
-      foo(inside_var)
-    end
+      foo(bar_var)
+    end.call
   end
 
   def test_exception_variables
     var1 = 'var1'
 
-    bar
+    bar(var1)
   end
 end

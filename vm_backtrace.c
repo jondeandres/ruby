@@ -492,30 +492,40 @@ bt_init(void *ptr, size_t size)
 static void bt_show_frame_variables(const rb_control_frame_t *cfp) {
     int i = 0;
     const rb_iseq_t *iseq = cfp->iseq;
-    rb_thread_t *th = GET_THREAD();
+    rb_thread_t *th;
+    VALUE binding;
+
+    if (iseq->local_table_size == 0) {
+        return;
+    }
+
+    if (!(GC_GUARDED_PTR_REF((cfp->ep)[0]) != 0)) {
+        fprintf(stdout, "CFP KO!!\n");
+
+        for (i=0; i < iseq->local_table_size; i++) {
+            VALUE sym = ID2SYM(iseq->local_table[i]);
+            VALUE var_name = rb_sym2str(sym);
+
+            if (var_name) {
+                fprintf(stdout, "\tLOCAL VARIABLE: %s\n", RSTRING_PTR(var_name));
+
+                binding = rb_vm_make_binding(th, cfp);
+            }
+        }
+
+        return;
+    }
+
+    fprintf(stdout, "CFP OK!\n");
+    th = GET_THREAD();
+    binding = rb_vm_make_binding(th, cfp);
 
     for (i=0; i < iseq->local_table_size; i++) {
         VALUE sym = ID2SYM(iseq->local_table[i]);
-        VALUE var_name = rb_sym2str(sym);
+        VALUE value = bind_local_variable_get(binding, sym);
 
-        if (!var_name) {
-            return;
-        }
-
-        fprintf(stderr, "%s\t\t=>\t", RSTRING_PTR(rb_sym2str(sym)));
-
-        // Check this value cause it's crashing in vm.c:VM_EP_LEP
-        // when calling vm.c:vm_make_env_object from vm.c:rb_vm_make_binding.
-        //
-        if (GC_GUARDED_PTR_REF((cfp->ep)[0]) != 0) {
-            VALUE binding = rb_vm_make_binding(th, cfp);
-            VALUE value = bind_local_variable_get(binding, sym);
-
-            fprintf(stderr, "%s\n", RSTRING_PTR(rb_obj_as_string(rb_inspect(value))));
-            //rb_p(value);
-        } else {
-            fprintf(stderr, "(cannot get value)\n");
-        }
+        fprintf(stdout, "Variable: %s\t\t=>\t", RSTRING_PTR(rb_sym2str(sym)));
+        fprintf(stdout, "%s\n", RSTRING_PTR(rb_obj_as_string(rb_inspect(value))));
     }
 }
 
